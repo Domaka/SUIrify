@@ -21,6 +21,13 @@ const DataFetchStep: React.FC<{
   const [error, setError] = useState("");
   const account = useCurrentAccount();
 
+  // keep the shared formData.walletAddress in sync with the connected account
+  React.useEffect(() => {
+    if (account?.address) {
+      setFormData((prev) => ({ ...prev, walletAddress: account.address }));
+    }
+  }, [account?.address, setFormData]);
+
   const fetchData = async () => {
     if (!account) return;
     setLoading(true);

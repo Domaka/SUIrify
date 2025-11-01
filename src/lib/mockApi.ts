@@ -10,6 +10,26 @@ export type GovernmentData = {
 export const fetchGovernmentData = async (
   params: { country: string; idNumber: string; walletAddress: string }
 ): Promise<{ success: boolean; data?: GovernmentData; message?: string }> => {
+  // Try backend gov-verify endpoint first (if developer has the verifier stub running)
+  const GOV_URL = (import.meta.env.VITE_VERIFIER_URL as string) || "http://localhost:4001";
+  try {
+    const resp = await fetch(`${GOV_URL}/gov-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country: params.country, idNumber: params.idNumber }),
+    });
+    if (resp.ok) {
+      const j = await resp.json();
+      if (j.success && j.data) {
+        return { success: true, data: j.data };
+      }
+    }
+    // fall through to local mock if remote returns 4xx/5xx or not found
+  } catch (e) {
+    // network error or server not running; fallback to local mock
+  }
+
+  // Fallback local deterministic mock (same as before)
   await sleep(1000);
   // Basic format checks mirroring UI validation
   const { country, idNumber } = params;

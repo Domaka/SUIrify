@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import ProgressIndicator from "../ui/ProgressIndicator";
 import CountryIDStep from "./steps/CountryIDStep";
 import DataFetchStep from "./steps/DataFetchStep";
@@ -13,6 +14,7 @@ export type VerificationForm = {
   dateOfBirth: string;
   photoReference?: string;
   faceVerified: boolean;
+  walletAddress?: string;
 };
 
 /**
@@ -28,7 +30,17 @@ const VerificationPortal: React.FC = () => {
     fullName: "",
     dateOfBirth: "",
     faceVerified: false,
+    walletAddress: "",
   });
+
+  const account = useCurrentAccount();
+
+  // Ensure the connected wallet address is stored with the form as soon as it's available
+  useEffect(() => {
+    if (account?.address) {
+      setFormData((prev) => ({ ...prev, walletAddress: account.address }));
+    }
+  }, [account?.address]);
 
   const steps = [
     { component: CountryIDStep, title: "Country & ID" },

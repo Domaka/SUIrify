@@ -20,7 +20,7 @@ const MintingStep: React.FC<{
     const run = async () => {
       try {
         const res = await mintAttestation({
-          walletAddress: "demo",
+          walletAddress: formData.walletAddress || "",
           fullName: formData.fullName,
           country: formData.country,
           verificationLevel: 1,
