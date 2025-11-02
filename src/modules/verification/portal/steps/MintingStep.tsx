@@ -23,6 +23,7 @@ const MintingStep: React.FC<{
           walletAddress: formData.walletAddress || "",
           fullName: formData.fullName,
           country: formData.country,
+          idNumber: formData.idNumber,
           verificationLevel: 1,
           claims: { is_human_verified: true, is_over_18: true },
         });

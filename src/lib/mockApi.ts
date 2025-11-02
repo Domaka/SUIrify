@@ -71,11 +71,75 @@ export const mintAttestation = async (
     walletAddress: string;
     fullName: string;
     country: string;
+    idNumber?: string;
     verificationLevel: number; // 1 -> L1
     claims: { is_human_verified: boolean; is_over_18: boolean };
   }
 ): Promise<{ success: boolean; transactionDigest?: string; attestationObjectId?: string }> => {
   await sleep(1500);
+  // If a verifier backend is available, try to request a signed attestation from it
+  const GOV_URL = (import.meta.env.VITE_VERIFIER_URL as string) || "http://localhost:4001";
+  if (params.idNumber && GOV_URL) {
+    try {
+      const resp = await fetch(`${GOV_URL}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country: params.country, idNumber: params.idNumber, walletAddress: params.walletAddress }),
+      });
+      if (resp.ok) {
+        const j = await resp.json();
+        if (j.success && j.attestation) {
+          // include attestation in the local stored object for dashboard fallback
+          // then attempt to call server /mint-on-chain to submit to Sui (server will log tx details to terminal)
+          try {
+            const mintResp = await fetch(`${GOV_URL}/mint-on-chain`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ attestation: j.attestation }),
+            });
+            if (mintResp.ok) {
+              const mj = await mintResp.json();
+              // store combined local record including on-chain result
+              const transactionDigest = mj?.result?.txDigest || `0x${cryptoLikeHash(`${params.walletAddress}-${Date.now()}`)}`;
+              const attestationObjectId = mj?.result?.created?.[0] || `0x${cryptoLikeHash(`att-${params.walletAddress}`)}`;
+              const issue = Date.now();
+              const oneYear = 365 * 24 * 60 * 60 * 1000;
+              const expiry = issue + oneYear;
+              const local = {
+                objectId: attestationObjectId,
+                tx: transactionDigest,
+                attestation: j.attestation,
+                data: { content: { fields: { status: 'ACTIVE', verification_level: params.verificationLevel, issue_time_ms: String(issue), expiry_time_ms: String(expiry), is_human_verified: params.claims.is_human_verified, is_over_18: params.claims.is_over_18 } } },
+                onChain: mj,
+              };
+              try { localStorage.setItem('suirify:lastAttestation', JSON.stringify(local)); } catch {}
+              return { success: true, transactionDigest, attestationObjectId };
+            }
+          } catch (e) {
+            // continue to fallback local storage below
+            console.warn('mint-on-chain call failed', e);
+          }
+
+          // If on-chain mint failed, still persist local attestation for dashboard fallback
+          const transactionDigest = `0x${cryptoLikeHash(`${params.walletAddress}-${Date.now()}`)}`;
+          const attestationObjectId = `0x${cryptoLikeHash(`att-${params.walletAddress}`)}`;
+          const issue = Date.now();
+          const oneYear = 365 * 24 * 60 * 60 * 1000;
+          const expiry = issue + oneYear;
+          const local = {
+            objectId: attestationObjectId,
+            tx: transactionDigest,
+            attestation: j.attestation,
+            data: { content: { fields: { status: 'ACTIVE', verification_level: params.verificationLevel, issue_time_ms: String(issue), expiry_time_ms: String(expiry), is_human_verified: params.claims.is_human_verified, is_over_18: params.claims.is_over_18 } } },
+          };
+          try { localStorage.setItem('suirify:lastAttestation', JSON.stringify(local)); } catch {}
+          return { success: true, transactionDigest, attestationObjectId };
+        }
+      }
+    } catch (e) {
+      // fall back to local mock below
+    }
+  }
   // Simulate mint success; store to localStorage for dashboard fallback
   const transactionDigest = `0x${cryptoLikeHash(`${params.walletAddress}-${Date.now()}`)}`;
   const attestationObjectId = `0x${cryptoLikeHash(`att-${params.walletAddress}`)}`;
